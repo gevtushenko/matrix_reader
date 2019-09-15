@@ -117,15 +117,121 @@ void skip_comments (istream &is, string &line)
   }
 }
 
-matrix_class::matrix_meta read_meta (string &meta_line)
+matrix_class::matrix_meta read_meta (
+    string &meta_line,
+    matrix_class::format format,
+    matrix_class::data_type data_type,
+    matrix_class::storage_scheme storage_scheme)
 {
   istringstream iss (meta_line);
-  matrix_class::matrix_meta meta;
 
-  if (iss >> meta.rows_count >> meta.cols_count >> meta.non_zero_count)
-    return meta;
+  std::remove_const<decltype(matrix_class::matrix_meta::rows_count)>::type rows_count {};
+  std::remove_const<decltype(matrix_class::matrix_meta::cols_count)>::type cols_count {};
+  std::remove_const<decltype(matrix_class::matrix_meta::non_zero_count)>::type non_zero_count {};
+
+  if (iss >> rows_count >> cols_count >> non_zero_count)
+    return { rows_count, cols_count, non_zero_count, format, data_type, storage_scheme };
 
   throw runtime_error ("Can't read matrix size");
+}
+
+template <typename data_t>
+class sparse_matrix : public matrix_class
+{
+public:
+  sparse_matrix (
+    matrix_class::matrix_meta meta_arg,
+    unique_ptr<data_t[]> data_arg,
+    unique_ptr<unsigned int[]> row_ids_arg,
+    unique_ptr<unsigned int[]> col_ids_arg)
+    : matrix_class (meta_arg)
+    , data (move (data_arg))
+    , row_ids (move (row_ids_arg))
+    , col_ids (move (col_ids_arg))
+  { }
+
+private:
+  unique_ptr<data_t[]> data;
+  unique_ptr<unsigned int[]> row_ids;
+  unique_ptr<unsigned int[]> col_ids;
+};
+
+class data_reader
+{
+public:
+  data_reader () = delete;
+  explicit data_reader (matrix_class::matrix_meta meta_arg)
+    : meta (meta_arg)
+  { }
+  virtual ~data_reader () = default;
+  virtual unique_ptr<matrix_class> read_matrix (istream &is) = 0;
+
+protected:
+  const matrix_class::matrix_meta meta;
+};
+
+class sparse_reader : public data_reader
+{
+public:
+  explicit sparse_reader (matrix_class::matrix_meta meta_arg)
+    : data_reader (meta_arg)
+  {
+    if (!meta.is_sparse ())
+      throw runtime_error ("Sparse reader is not supposed for dense matrices");
+
+    row_ids.reset (new unsigned int[meta.non_zero_count]);
+    col_ids.reset (new unsigned int[meta.non_zero_count]);
+
+    if (meta.matrix_data_type == matrix_class::data_type::real)
+      dbl_data.reset (new double[meta.non_zero_count]);
+    else if (meta.matrix_data_type == matrix_class::data_type::integer)
+      int_data.reset (new int[meta.non_zero_count]);
+    else
+      throw std::runtime_error ("Unsupported matrix data type");
+  }
+
+  unique_ptr<matrix_class> read_matrix (istream &is) override
+  {
+    if (dbl_data)
+      return read_lines (is, dbl_data);
+    else if (int_data)
+      return read_lines (is, int_data);
+
+    return nullptr;
+  }
+
+private:
+  template <typename data_t>
+  unique_ptr<sparse_matrix<data_t>> read_lines (istream &is, unique_ptr<data_t[]> &data)
+  {
+    string line;
+
+    size_t nz = 0;
+
+    while (getline (is, line))
+    {
+      istringstream iss (line);
+      iss >> row_ids[nz] >> col_ids[nz] >> data[nz];
+    }
+
+    return make_unique<sparse_matrix<data_t>> (
+        meta, move (data), move (row_ids), move (col_ids));
+  }
+
+private:
+  unique_ptr<int[]> int_data;
+  unique_ptr<double[]> dbl_data;
+
+  unique_ptr<unsigned int[]> row_ids;
+  unique_ptr<unsigned int[]> col_ids;
+};
+
+unique_ptr<data_reader> create_reader (const matrix_class::matrix_meta &meta_arg)
+{
+  if (meta_arg.is_sparse ())
+    return make_unique<sparse_reader> (meta_arg);
+
+  throw std::runtime_error ("Matrix type is not supported");
 }
 
 #define DEBUG_READER 0
@@ -150,7 +256,8 @@ reader::reader (istream &is, bool throw_exceptions)
 
       skip_comments (is, line);
 
-      matrix_class::matrix_meta meta = read_meta (line);
+      auto reader = create_reader (read_meta (line, format, data_type, storage_scheme));
+      matrix_data = reader->read_matrix (is);
     }
     else
     {

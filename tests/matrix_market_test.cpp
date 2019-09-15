@@ -20,4 +20,5 @@ TEST(matrix_market_reader, empty_sparse)
   istringstream iss (mm_file_content);
 
   matrix_market::reader reader (iss);
+  ASSERT_TRUE (reader);
 }
