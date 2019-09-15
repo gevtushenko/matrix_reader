@@ -69,8 +69,26 @@ public:
   size_t get_rows_count () const { return meta.rows_count; }
   size_t get_cols_count () const { return meta.cols_count; }
 
-protected:
-  matrix_meta meta;
+  virtual const unsigned int *get_row_ids () const = 0; /// Return nullptr for dense matrices
+  virtual const unsigned int *get_col_ids () const = 0; /// Return nullptr for dense matrices
+  virtual const void *get_data () const = 0;
+
+  const double *get_dbl_data () const
+  {
+    if (meta.matrix_data_type == data_type::real)
+      return reinterpret_cast<const double *> (get_data ());
+    throw std::runtime_error ("Accessing non dbg matrix as dbl");
+  }
+
+  const int *get_int_data () const
+  {
+    if (meta.matrix_data_type == data_type::integer)
+      return reinterpret_cast<const int*> (get_data ());
+    throw std::runtime_error ("Accessing non int matrix as int");
+  }
+
+public:
+  const matrix_meta meta;
 };
 
 class reader

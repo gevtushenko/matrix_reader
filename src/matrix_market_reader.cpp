@@ -150,6 +150,10 @@ public:
     , col_ids (move (col_ids_arg))
   { }
 
+  const unsigned int *get_row_ids () const override { return row_ids.get (); }
+  const unsigned int *get_col_ids () const override { return col_ids.get (); }
+  const void *get_data () const override { return data.get (); }
+
 private:
   unique_ptr<data_t[]> data;
   unique_ptr<unsigned int[]> row_ids;
@@ -205,13 +209,14 @@ private:
   unique_ptr<sparse_matrix<data_t>> read_lines (istream &is, unique_ptr<data_t[]> &data)
   {
     string line;
-
     size_t nz = 0;
 
     while (getline (is, line))
     {
       istringstream iss (line);
       iss >> row_ids[nz] >> col_ids[nz] >> data[nz];
+             row_ids[nz]--; col_ids[nz]--; ///< Matrix Market counts indices from 1
+      nz++;
     }
 
     return make_unique<sparse_matrix<data_t>> (
