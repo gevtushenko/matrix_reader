@@ -293,3 +293,11 @@ matrix_class &reader::matrix ()
 
   throw runtime_error ("Current instance of reader isn't initialized");
 }
+
+const matrix_class &reader::matrix () const
+{
+  if (is_correct && matrix_data)
+    return *matrix_data;
+
+  throw runtime_error ("Current instance of reader isn't initialized");
+}

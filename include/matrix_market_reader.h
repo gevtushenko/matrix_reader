@@ -100,6 +100,7 @@ public:
   operator bool () const;
 
   matrix_class &matrix ();
+  const matrix_class &matrix () const;
 
 private:
   bool is_correct = false;
