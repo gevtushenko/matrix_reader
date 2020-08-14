@@ -66,6 +66,8 @@ public:
   matrix_class () = delete;
   explicit matrix_class (matrix_meta meta_arg) : meta (meta_arg) { }
 
+  virtual ~matrix_class() = default;
+
   size_t get_rows_count () const { return meta.rows_count; }
   size_t get_cols_count () const { return meta.cols_count; }
 
